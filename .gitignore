@@ -1,0 +1,17 @@
+# Python
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Go
+taraDrop
+taraDrop.exe
+*.exe
+
+# App Data
+uploads/
+
+# OS
+.DS_Store
+Thumbs.db
