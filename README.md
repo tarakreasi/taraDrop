@@ -70,4 +70,4 @@ make windows
 ## Author & Repository
 
 *   **GitHub**: [tarakreasi/taraDrop](https://github.com/tarakreasi/taraDrop)
-*   **Maintainer**: tarakreasi (ajarsinau@gmail.com)
+*   **Maintainer**: Tri Wantoro (ajarsinau@gmail.com)
