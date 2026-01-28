@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,7 +24,6 @@ import (
 
 // Configuration constants
 const (
-	ServerPort         = ":5000"
 	UploadFolder       = "uploads"
 	MaxUploadSize      = 16 * 1024 * 1024 * 1024 // 16GB
 	ServerReadTimeout  = 1 * time.Hour
@@ -64,8 +64,9 @@ func main() {
 }
 
 func startServer() {
+	port := getServerPort()
 	server := &http.Server{
-		Addr:           ServerPort,
+		Addr:           port,
 		ReadTimeout:    ServerReadTimeout,
 		WriteTimeout:   ServerWriteTimeout,
 		MaxHeaderBytes: 1 << 20, // 1MB
@@ -73,7 +74,12 @@ func startServer() {
 
 	// Update GUI with URL once server is technically "ready" (IP might shift but usually static on launch)
 	ip := getLocalIP()
-	urlStr := fmt.Sprintf("http://%s%s", ip, ServerPort)
+	urlStr := fmt.Sprintf("http://%s%s", ip, port)
+	// If port 80, cleaner URL
+	if port == ":80" {
+		urlStr = fmt.Sprintf("http://%s", ip)
+	}
+
 	log.Printf("Server starting at %s", urlStr)
 
 	// Refresh UI label on main thread if needed, but simple label setText is thread-safe in Fyne usually,
@@ -93,7 +99,12 @@ func buildUI() {
 
 	// IP/Status
 	ip := getLocalIP()
-	urlStr := fmt.Sprintf("http://%s%s", ip, ServerPort)
+	port := getServerPort()
+	urlStr := fmt.Sprintf("http://%s%s", ip, port)
+	if port == ":80" {
+		urlStr = fmt.Sprintf("http://%s", ip)
+	}
+
 	statusLabel = widget.NewLabel(fmt.Sprintf("Running at:\n%s", urlStr))
 	statusLabel.Alignment = fyne.TextAlignCenter
 
@@ -116,6 +127,11 @@ func buildUI() {
 	// Simple red-ish feedback logic isn't built-in easily without custom theme,
 	// but standard button is fine.
 
+	// Footer Link
+	linkUrl, _ := url.Parse("https://tarakreasi.com")
+	footer := widget.NewHyperlink("create by Tri Wantoro | tarakreasi.com", linkUrl)
+	footer.Alignment = fyne.TextAlignCenter
+
 	// Layout
 	content := container.New(layout.NewVBoxLayout(),
 		layout.NewSpacer(),
@@ -128,9 +144,18 @@ func buildUI() {
 		layout.NewSpacer(),
 		widget.NewSeparator(),
 		stopBtn,
+		layout.NewSpacer(),
+		footer,
 	)
 
 	mainWindow.SetContent(content)
+}
+
+func getServerPort() string {
+	if runtime.GOOS == "windows" {
+		return ":80"
+	}
+	return ":5000"
 }
 
 // openDir opens the directory using the OS default file manager
@@ -250,6 +275,17 @@ func handleUploadChunk(w http.ResponseWriter, r *http.Request) {
 
 // getLocalIP attempts to find the local machine's IP address
 func getLocalIP() string {
+	// Method 1: Connect to a public DNS server
+	// This doesn't actually establish a connection, but asks the OS
+	// which interface it would use to reach that IP.
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err == nil {
+		defer conn.Close()
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+		return localAddr.IP.String()
+	}
+
+	// Method 2: Fallback to iterating interfaces
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
 		return "localhost"
