@@ -12,3 +12,8 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# Content Drafts
+blog_post.md
+linkedin_id.md
+linkedin_en.md
