@@ -266,7 +266,7 @@
 
         <form id="uploadForm" enctype="multipart/form-data">
             <div id="dropZone" class="drop-zone">
-                <input type="file" name="file" id="fileInput" required>
+                <input type="file" name="file" id="fileInput" multiple required>
                 <!-- Orange Accent Icon -->
                 <svg class="icon-cloud" fill="currentColor" viewBox="0 0 24 24">
                     <path
@@ -277,7 +277,7 @@
             </div>
 
             <!-- Blue Primary Button -->
-            <button type="submit" id="submitBtn" class="btn-ios">Send File</button>
+            <button type="submit" id="submitBtn" class="btn-ios">Send Files</button>
         </form>
 
         <div id="progress-container">
@@ -321,7 +321,11 @@
         // File Selection
         fileInput.addEventListener('change', function () {
             if (this.files && this.files.length > 0) {
-                fileNameDisplay.textContent = this.files[0].name;
+                if (this.files.length === 1) {
+                    fileNameDisplay.textContent = this.files[0].name;
+                } else {
+                    fileNameDisplay.textContent = `${this.files.length} files selected`;
+                }
                 fileNameDisplay.style.color = '#1c1c1e';
             }
         });
@@ -331,40 +335,50 @@
             e.preventDefault();
             if (fileInput.files.length === 0) return;
 
-            const file = fileInput.files[0];
-            const chunkSize = 1 * 1024 * 1024;
-            const totalChunks = Math.ceil(file.size / chunkSize);
-            const filename = file.name;
+            const files = fileInput.files;
+            const totalFiles = files.length;
+            const chunkSize = 1 * 1024 * 1024; // 1MB chunks
 
             // Animate UI
             document.getElementById('submitBtn').style.display = 'none';
             document.getElementById('dropZone').style.display = 'none';
             document.getElementById('progress-container').style.display = 'block';
 
-            for (let i = 0; i < totalChunks; i++) {
-                const start = i * chunkSize;
-                const end = Math.min(start + chunkSize, file.size);
-                const chunk = file.slice(start, end);
-                const formData = new FormData();
+            for (let f = 0; f < totalFiles; f++) {
+                const file = files[f];
+                const totalChunks = Math.ceil(file.size / chunkSize);
+                const filename = file.name;
 
-                formData.append('file', chunk);
-                formData.append('filename', filename);
-                formData.append('chunkIndex', i);
+                // Update status for current file
+                document.getElementById('statusMsg').textContent = `Sending ${f + 1}/${totalFiles}: ${filename}`;
+                 // Reset progress bar for next file
+                updateProgress(0);
 
-                try {
-                    await uploadChunk(formData);
-                    const percent = Math.round(((i + 1) / totalChunks) * 100);
-                    updateProgress(percent);
-                } catch (error) {
-                    i--; // Retry
-                    await new Promise(r => setTimeout(r, 1000));
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(start + chunkSize, file.size);
+                    const chunk = file.slice(start, end);
+                    const formData = new FormData();
+
+                    formData.append('file', chunk);
+                    formData.append('filename', filename);
+                    formData.append('chunkIndex', i);
+
+                    try {
+                        await uploadChunk(formData);
+                        const percent = Math.round(((i + 1) / totalChunks) * 100);
+                        updateProgress(percent);
+                    } catch (error) {
+                        i--; // Retry chunk
+                        await new Promise(r => setTimeout(r, 1000));
+                    }
                 }
             }
 
             // Finish
             document.querySelector('.warning-pill').style.display = 'none';
             const statusMsg = document.getElementById('statusMsg');
-            statusMsg.innerHTML = '<span class="success-text">Sent Successfully!</span>';
+            statusMsg.innerHTML = '<span class="success-text">All Sent Successfully!</span>';
             statusMsg.style.justifyContent = 'center';
             document.getElementById('statusPercent').style.display = 'none';
             document.getElementById('progress-bar').style.backgroundColor = '#34C759'; // Success Green
