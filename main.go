@@ -64,15 +64,36 @@ func main() {
 }
 
 func startServer() {
-	port := getServerPort()
+	var listener net.Listener
+	var err error
+	var port string
+
+	// Try port 80 first on Windows, fallback to 5000
+	if runtime.GOOS == "windows" {
+		port = ":80"
+		listener, err = net.Listen("tcp", port)
+		if err != nil {
+			log.Printf("Failed to bind to port 80: %v. Falling back to port 5000.", err)
+			port = ":5000"
+			listener, err = net.Listen("tcp", port)
+		}
+	} else {
+		// Non-Windows always use 5000
+		port = ":5000"
+		listener, err = net.Listen("tcp", port)
+	}
+
+	if err != nil {
+		log.Fatalf("Server failed to bind to any port: %v", err)
+	}
+
 	server := &http.Server{
-		Addr:           port,
 		ReadTimeout:    ServerReadTimeout,
 		WriteTimeout:   ServerWriteTimeout,
 		MaxHeaderBytes: 1 << 20, // 1MB
 	}
 
-	// Update GUI with URL once server is technically "ready" (IP might shift but usually static on launch)
+	// Update GUI with URL once server is technically "ready"
 	ip := getLocalIP()
 	urlStr := fmt.Sprintf("http://%s%s", ip, port)
 	// If port 80, cleaner URL
@@ -82,13 +103,17 @@ func startServer() {
 
 	log.Printf("Server starting at %s", urlStr)
 
-	// Refresh UI label on main thread if needed, but simple label setText is thread-safe in Fyne usually,
-	// or best practice:
+	// Refresh UI label on main thread
 	if statusLabel != nil {
-		statusLabel.SetText(fmt.Sprintf("Running at:\n%s", urlStr))
+		// Ensure UI updates happen on main thread to avoid races
+		go func(u string) {
+			// Small delay to ensure UI is drawn before we update it
+			time.Sleep(100 * time.Millisecond)
+			statusLabel.SetText(fmt.Sprintf("Running at:\n%s", u))
+		}(urlStr)
 	}
 
-	if err := server.ListenAndServe(); err != nil {
+	if err := server.Serve(listener); err != nil {
 		log.Printf("Server failed: %v", err)
 	}
 }
@@ -97,15 +122,8 @@ func buildUI() {
 	// Header
 	title := widget.NewLabelWithStyle("taraDrop Server", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 
-	// IP/Status
-	ip := getLocalIP()
-	port := getServerPort()
-	urlStr := fmt.Sprintf("http://%s%s", ip, port)
-	if port == ":80" {
-		urlStr = fmt.Sprintf("http://%s", ip)
-	}
-
-	statusLabel = widget.NewLabel(fmt.Sprintf("Running at:\n%s", urlStr))
+	// IP/Status (Initial state, will be updated by startServer)
+	statusLabel = widget.NewLabel("Starting server...")
 	statusLabel.Alignment = fyne.TextAlignCenter
 
 	// Upload Folder Button
@@ -149,13 +167,6 @@ func buildUI() {
 	)
 
 	mainWindow.SetContent(content)
-}
-
-func getServerPort() string {
-	if runtime.GOOS == "windows" {
-		return ":80"
-	}
-	return ":5000"
 }
 
 // openDir opens the directory using the OS default file manager
