@@ -1,10 +1,17 @@
+# Go binaries
+taraDrop
+taraDrop.exe
+
+# Go build artifacts
+*.o
+*.a
+*.so
+
 # Python
 venv/
 __pycache__/
 *.py[cod]
 *$py.class
-
-
 
 # App Data
 uploads/
